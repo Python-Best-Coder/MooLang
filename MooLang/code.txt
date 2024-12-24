@@ -1,0 +1,12 @@
+c = 0
+func x (pi) {
+    if (pi == 5) {
+        console.out() <- "CLICK!"
+    }
+}
+
+rloop (0 to 10) {
+    c++
+    x() <- $c
+    console.out() <- $c
+}
