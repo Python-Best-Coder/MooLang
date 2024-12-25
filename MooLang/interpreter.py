@@ -3,7 +3,7 @@ import random
 import time
 
 print("Initializing...")
-data = open(r"code.txt","r").read()
+data = open(r"C:\Users\mqrsh\OneDrive\Desktop\MyTinyPC\MooLang\code.txt","r").read()
 
 
 def generate_id():
@@ -89,10 +89,10 @@ class RangeLoop:
         self.lines.append(line)
     
     def run(self):
-        print(self.lines[1:])
+
         for _ in range(self.range[0],self.range[1]):
-            
-            for line in self.lines[1:]:
+
+            for line in self.lines[1:]:  
                 evaluate(line.strip())
 class Statement:
     def __init__(self,statement):
@@ -105,7 +105,6 @@ class Statement:
         self.lines.append(line)
     
     def run(self):
-        print(self.lines)
         if evaluate(self.statement):
             for line in self.lines[1:]:
                 evaluate(line)
@@ -274,6 +273,12 @@ def evaluate(expression:str,silent=False):
     less_equal = re.search(r"(.+)<=(.+)",str(expression))
     equal = re.search(r"(.+)==(.+)",str(expression))
     not_equal = re.search(r"(.+)!=(.+)",str(expression))
+    one_line_if = re.search(r"if \((.+?)\) \{(.+)\}",str(expression))
+    if one_line_if:
+        if evaluate(one_line_if.group(1)):
+            for line in one_line_if.group(2).split(";"):
+                evaluate(line)
+        return None
     if condition:
         return "if"
     if varsubtract:
@@ -309,19 +314,27 @@ def evaluate(expression:str,silent=False):
         print("Errno 002: No variable to reassign.")
     if rloops:
         return ["rloop",rloops.group(1),rloops.group(2)]
-    if greater:
-        if not "-" in greater.group(1) and not "-" in greater.group(2):
-            if evaluate(greater.group(1)) and evaluate(greater.group(2)):
-                return evaluate(greater.group(1)) > evaluate(greater.group(2))
-    if less:
-        if not "-" in expression:
-            return evaluate(less.group(1)) < evaluate(less.group(2))
-    if greater_equal:
-        return evaluate(greater_equal.group(1)) >= evaluate(greater_equal.group(2))
-    if less_equal:
-        return evaluate(less_equal.group(1)) <= evaluate(less_equal.group(2))
-    if equal:
-        return evaluate(equal.group(1)) == evaluate(equal.group(2))
+    if equal or greater_equal or less_equal or greater or less:
+        left = evaluate((equal or greater_equal or less_equal or greater or less).group(1).strip())
+        right = evaluate((equal or greater_equal or less_equal or greater or less).group(2).strip())
+
+        # Unwrap the values if they are custom objects
+        left_value = left.value if isinstance(left, (Integer, Float, Bool)) else left
+        right_value = right.value if isinstance(right, (Integer, Float, Bool)) else right
+
+        # Perform the comparison based on the operator
+        if equal:
+            return left_value == right_value
+        elif greater_equal:
+            return left_value >= right_value
+        elif less_equal:
+            return left_value <= right_value
+        elif greater and not "-" in expression:
+            return left_value > right_value
+        elif less and not "-" in expression:
+            return left_value < right_value
+
+
     if not_equal:
         return evaluate(not_equal.group(1)) != evaluate(not_equal.group(2))
     if division:
@@ -421,7 +434,6 @@ def evaluate(expression:str,silent=False):
         value2 = multiplication.group(2)
         
         return multiply(tokenize(value1), tokenize(value2))
-
     return tokenize(expression)
 
     
