@@ -3,7 +3,9 @@ import random
 import time
 
 print("Initializing...")
-data = open(r"C:\Users\mqrsh\OneDrive\Desktop\MyTinyPC\MooLang\code.txt","r").read()
+
+with open(r"code.txt", encoding="utf-8") as f:
+    data = f.read()
 
 
 def generate_id():
