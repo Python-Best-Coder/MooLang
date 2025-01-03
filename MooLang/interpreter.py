@@ -80,6 +80,8 @@ class Function:
                     run = False
             if run:
                 evaluate(line)
+
+
 class RangeLoop:
     def __init__(self,fr,to):
         self.range = [fr,to]
@@ -91,11 +93,11 @@ class RangeLoop:
         self.lines.append(line)
     
     def run(self):
-
         for _ in range(self.range[0],self.range[1]):
-
             for line in self.lines[1:]:  
                 evaluate(line.strip())
+
+
 class Statement:
     def __init__(self,statement):
         self.statement = statement
