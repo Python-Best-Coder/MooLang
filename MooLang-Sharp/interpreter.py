@@ -116,6 +116,14 @@ def interpret(line):
         return line[1:]
     elif len(line) >= 2 and line[0] in ['"',"'"] and line[-1] in ['"',"'"]:
         return str(line[1:-1])
+    for name in functions:
+        if name[0] in line:
+            call = re.search(name[0]+r"\((.+)\)",line)
+            if call:
+                p = []
+                for itex in call.group(1).split(","):
+                    p.append(interpret(itex))
+                name[1].run(p)
     
     return line
 
@@ -124,20 +132,9 @@ def interpret(line):
 def work(p):
     with open(p,"r") as file:
         for line in file.read().splitlines():
+            line = line.strip()
             if inside == [] or not isinstance(inside[-1],Statement) and not isinstance(inside[-1],Forl) and not isinstance(inside[-1],Function):
-                n = False
-                for name in functions:
-                    if name[0] in line:
-                        n = True
-                        call = re.search(name[0]+r"\((.+)\)",line)
-                        if call:
-                            p = []
-                            for itex in call.group(1).split(","):
-                                p.append(interpret(itex))
-                            name[1].run(p)
-
-                if not n:
-                    x = interpret(line)
+                x = interpret(line)
             else:
                 if len(inside) >= 1:
                     if isinstance(inside[-1],Statement):
@@ -146,13 +143,13 @@ def work(p):
                         else:
                             inside[-1].run()
                             inside.pop()
-                    if isinstance(inside[-1],Forl):
+                    elif isinstance(inside[-1],Forl):
                         if line != "}":
                             inside[-1].add_line(line)
                         else:
                             inside[-1].run()
                             inside.pop()
-                    if isinstance(inside[-1],Function):
+                    elif isinstance(inside[-1],Function):
                         if line != "}":
                             inside[-1].add_line(line)
                         else:
