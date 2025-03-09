@@ -1,0 +1,5 @@
+moovar: list = [1,2,3]
+
+for item in moovar {
+    console.out(item)
+}
