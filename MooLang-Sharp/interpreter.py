@@ -29,9 +29,7 @@ class Whilel:
         self.lines.append(line)
 
     def run(self):
-        while True:
-            if not interpret(self.c):
-                break
+        while interpret(self.c):
             for line in self.lines:
                 interpret(line)
    
@@ -75,6 +73,7 @@ class Function:
 
 
 variables = {}
+typeroo = {}
 functions = []
 global_scope = 0
 inside = []
@@ -92,17 +91,20 @@ def interpret(line):
     makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*", line) 
     indexation = re.search(r"(.+)\[(.+)\]",line)
     out = re.search(r"console.out\((.+)\)",line)
-    add = re.search(r"\s*(\S+)\s*\+\s*(\S+)\s*", line) 
-    sub = re.search(r"\s*(\S+)\s*\-\s*(\S+)\s*", line)
-    mul = re.search(r"\s*(\S+)\s*\*\s*(\S+)\s*", line)
-    div = re.search(r"\s*(\S+)\s*/\s*(\S+)\s*", line)
-    eq  = re.search(r"\s*(\S+)\s*==\s*(\S+)\s*", line)
-    gr  = re.search(r"\s*(\S+)\s*\>\s*(\S+)\s*", line)
-    ls  = re.search(r"\s*(\S+)\s*\<\s*(\S+)\s*", line)
-    gre  = re.search(r"\s*(\S+)\s*\>=\s*(\S+)\s*", line)
-    lse  = re.search(r"\s*(\S+)\s*\<=\s*(\S+)\s*", line)
+    add = re.search(r"^\s*(\S+)\s*\+\s*(\S+)\s*$", line)
+    sub = re.search(r"^\s*(\S+)\s*\-\s*(\S+)\s*$", line)
+    mul = re.search(r"^\s*(\S+)\s*\*\s*(\S+)\s*$", line)
+    div = re.search(r"^\s*(\S+)\s*/\s*(\S+)\s*$", line)
+    eq  = re.search(r"^\s*(\S+)\s*\=\=\s*(\S+)\s*$", line)
+    addeq  = re.search(r"^\s*(\S+)\s*\+=\s*(\S+)\s*$", line)
+    subeq  = re.search(r"^\s*(\S+)\s*\-=\s*(\S+)\s*$", line)
+    gr  = re.search(r"^\s*(\S+)\s*>\s*(\S+)\s*$", line)
+    ls  = re.search(r"^\s*(\S+)\s*<\s*(\S+)\s*$", line)
+    gre  = re.search(r"^\s*(\S+)\s*>=\s*(\S+)\s*$", line)
+    lse  = re.search(r"^\s*(\S+)\s*<=\s*(\S+)\s*$", line)
+
     no_t = re.search(r"not (.+)",line)
-    ct = re.search(r"(.+)#\((.+)\)",line)
+    ct = re.search(r"#(.+)#\[(.+)\]",line)
     autols = re.search(r"range\{(.+)\}",line)
     ifst = re.search(r"if \((.+)\) then \{",line)
     forloop = re.search(r"for (.+) in \((.+)\) \{",line)
@@ -115,6 +117,7 @@ def interpret(line):
     elif makevar:
         if is_name(makevar.group(1).strip()):
             variables[makevar.group(1).strip()] = eval(f"{makevar.group(2)}({interpret(makevar.group(3))})")
+            typeroo[makevar.group(1).strip()] = makevar.group(2)
         else:
             print(f"Moo Error: {makevar.group(1)} \n{err_syntax('Name cannot be used as a variable')}")
             return "Terminate_*"
@@ -127,22 +130,8 @@ def interpret(line):
     elif funct:
         if is_name(funct.group(1)):
             inside.append(Function(funct.group(1),funct.group(2).split(",")))
-    elif indexation:
-        return variables[interpret(indexation.group(1))][int(interpret(indexation.group(2)))]
-    elif autols:
-        x = []
-        for i in range(int(autols.group(1))):
-            x.append(i)
-        return x
-        
-    elif sub:
-        return interpret(sub.group(1)) - interpret(sub.group(2))
-    elif add:
-        return interpret(add.group(1)) + interpret(add.group(2))
-    elif div:
-        return interpret(div.group(1)) / interpret(div.group(2))
-    elif mul:
-        return interpret(mul.group(1)) * interpret(mul.group(2))
+    elif no_t:
+        return not interpret(no_t.group(1))
     elif eq:
         return interpret(eq.group(1)) == interpret(eq.group(2))
     elif gr:
@@ -153,10 +142,30 @@ def interpret(line):
         return interpret(gre.group(1)) >= interpret(gre.group(2))
     elif lse:
         return interpret(lse.group(1)) <= interpret(lse.group(2))
-    elif no_t:
-        return not interpret(no_t.group(1))
     elif an_d:
         return interpret(an_d.group(1)) and interpret(an_d.group(2))
+    elif ct:
+        return eval(f"{ct.group(1)}({ct.group(2)})")
+    elif indexation:
+        return variables[interpret(indexation.group(1))][int(interpret(indexation.group(2)))]
+    elif autols:
+        x = []
+        for i in range(int(autols.group(1))):
+            x.append(i)
+        return x
+    elif subeq:
+        variables[subeq.group(1)] -= eval(f"{typeroo[subeq.group(1)]}({interpret(subeq.group(2))})")
+    elif addeq:
+        variables[addeq.group(1)] += eval(f"{typeroo[addeq.group(1)]}({interpret(addeq.group(2))})")
+    elif sub:
+        return interpret(sub.group(1)) - interpret(sub.group(2))
+    elif add:
+        return interpret(add.group(1)) + interpret(add.group(2))
+    elif div:
+        return interpret(div.group(1)) / interpret(div.group(2))
+    elif mul:
+        return interpret(mul.group(1)) * interpret(mul.group(2))
+
     elif line in variables:
         return variables[line]
     elif line.startswith("$") and line[1:] in variables:
@@ -172,8 +181,7 @@ def interpret(line):
                     p.append(interpret(itex))
                 name[1].run(p)
                 return name[1]
-    if ct:
-        return eval(f"{ct.group(1)}({ct.group(2)})")
+    
 
     
     return line
