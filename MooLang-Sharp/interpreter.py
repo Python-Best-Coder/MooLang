@@ -1,7 +1,9 @@
 import re
 import colorama
+import time
 
 path = "code.ml2" # Switch to any moo-lang-2 file (.ml2) inside the folder.
+debugmode = False
 
 class Forl:
     def __init__(self,replacementvar,inside):
@@ -65,11 +67,24 @@ class Function:
         for index,parameter in enumerate(self.param):
             variables[parameter] = param[index]
         for line in self.lines:
-            interpret(line)
+            if not line.split(" ")[0] == "return":
+                interpret(line)
+            else:
+                mo = interpret("".join(line.split(" ")[1:]))
+                for p in self.param:
+                    if p in variables:
+                        variables.pop(p)
+                for p in self.extravars:
+                    if p in variables:
+                        variables.pop(p)
+                return mo
+
         for p in self.param:
-            variables.pop(p)
+            if p in variables:
+                variables.pop(p)
         for p in self.extravars:
-            variables.pop(p)
+            if p in variables:
+                variables.pop(p)
 
 
 variables = {}
@@ -84,14 +99,27 @@ def err_syntax(m):
 def is_name(s):
     return re.search(r"^[a-zA-Z_][a-zA-Z0-9_]*$",s)
 
+def moocleanup():
+    try:
+        for var in typeroo:
+            if not var in variables:
+                typeroo.pop(var)
+    except Exception:
+        pass
+
+
+
 def interpret(line):
     global variables,inside
-    line = line.strip()
+    line = str(line).strip()
+    if debugmode:
+        print(line)
 
-    makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*", line) 
+    makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*;", line) 
     indexation = re.search(r"(.+)\[(.+)\]",line)
     out = re.search(r"console.out\((.+)\)",line)
     add = re.search(r"^\s*(\S+)\s*\+\s*(\S+)\s*$", line)
+    removevar = re.search(r"rmv (.+)",line)
     sub = re.search(r"^\s*(\S+)\s*\-\s*(\S+)\s*$", line)
     mul = re.search(r"^\s*(\S+)\s*\*\s*(\S+)\s*$", line)
     div = re.search(r"^\s*(\S+)\s*/\s*(\S+)\s*$", line)
@@ -102,6 +130,7 @@ def interpret(line):
     ls  = re.search(r"^\s*(\S+)\s*<\s*(\S+)\s*$", line)
     gre  = re.search(r"^\s*(\S+)\s*>=\s*(\S+)\s*$", line)
     lse  = re.search(r"^\s*(\S+)\s*<=\s*(\S+)\s*$", line)
+    inputs = re.search(r"inp\[(.+)\]",line)
 
     no_t = re.search(r"not (.+)",line)
     ct = re.search(r"#(.+)#\[(.+)\]",line)
@@ -114,13 +143,26 @@ def interpret(line):
     if out:
         print(interpret(out.group(1)))
         return interpret(out.group(1))
+
     elif makevar:
         if is_name(makevar.group(1).strip()):
-            variables[makevar.group(1).strip()] = eval(f"{makevar.group(2)}({interpret(makevar.group(3))})")
+            mooey = interpret(makevar.group(3))
+            if isinstance(mooey,list):
+                mooey = mooey[-1]
+
+
+            variables[makevar.group(1).strip()] = eval(f"{makevar.group(2)}({mooey})")
+            
             typeroo[makevar.group(1).strip()] = makevar.group(2)
         else:
             print(f"Moo Error: {makevar.group(1)} \n{err_syntax('Name cannot be used as a variable')}")
             return "Terminate_*"
+    elif removevar:
+        if removevar.group(1) in variables:
+            variables.pop(removevar.group(1))
+    elif inputs:
+        
+        return input(interpret(inputs.group(1)))
     elif ifst:
         inside.append(Statement(interpret(ifst.group(1))))
     elif forloop:
@@ -133,6 +175,7 @@ def interpret(line):
     elif no_t:
         return not interpret(no_t.group(1))
     elif eq:
+        print(interpret(eq.group(1)),interpret(eq.group(2)))
         return interpret(eq.group(1)) == interpret(eq.group(2))
     elif gr:
         return interpret(gr.group(1)) > interpret(gr.group(2))
@@ -150,7 +193,7 @@ def interpret(line):
         return variables[interpret(indexation.group(1))][int(interpret(indexation.group(2)))]
     elif autols:
         x = []
-        for i in range(int(autols.group(1))):
+        for i in range(int(interpret(autols.group(1).strip()))):
             x.append(i)
         return x
     elif subeq:
@@ -179,51 +222,53 @@ def interpret(line):
                 p = []
                 for itex in call.group(1).split(","):
                     p.append(interpret(itex))
-                name[1].run(p)
-                return name[1]
+                sc = name[1].run(p)
+                if type(sc) == list:
+                    sc = sc[0]
+                
+                return sc
     
+    moocleanup()
 
-    
     return line
 
 
 
-def work(p):
-    with open(p,"r") as file:
-        for line in file.read().splitlines():
+def work(txt:str):
+        for line in open(txt,"r").read().splitlines():
+            
             line = line.strip()
-            if inside == [] or not isinstance(inside[-1],Statement) and not isinstance(inside[-1],Forl) and not isinstance(inside[-1],Function) and not isinstance(inside[-1],Whilel):
+            if inside == [] or not isinstance(inside[0],Statement) and not isinstance(inside[0],Forl) and not isinstance(inside[0],Function) and not isinstance(inside[0],Whilel):
                 x = interpret(line)
             else:
                 if len(inside) >= 1:
-                    if isinstance(inside[-1],Statement):
+                    if isinstance(inside[0],Statement):
                         if line != "}":
-                            inside[-1].add_line(line)
+                            inside[0].add_line(line)
                         else:
-                            inside[-1].run()
+                            inside[0].run()
                             inside.pop()
-                    elif isinstance(inside[-1],Forl):
+                    elif isinstance(inside[0],Forl):
                         if line != "}":
-                            inside[-1].add_line(line)
+                            inside[0].add_line(line)
                         else:
-                            inside[-1].run()
+                            inside[0].run()
                             inside.pop()
-                    elif isinstance(inside[-1],Whilel):
+                    elif isinstance(inside[0],Whilel):
                         if line != "}":
-                            inside[-1].add_line(line)
+                            inside[0].add_line(line)
                         else:
-                            inside[-1].run()
+                            inside[0].run()
                             inside.pop()
-                    elif isinstance(inside[-1],Function):
+                    elif isinstance(inside[0],Function):
                         if line != "}":
-                            inside[-1].add_line(line)
+                            inside[0].add_line(line)
                         else:
-                            functions.append((inside[-1].name,inside[-1]))
+                            functions.append((inside[0].name,inside[0]))
                             inside.pop()
 
-
-
-            if x == "Terminate_*":
-                break
+rfke = time.time()
 
 work(path)
+
+print(f"Ran in {time.time() - rfke} secs")
