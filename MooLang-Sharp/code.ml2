@@ -1,5 +1,10 @@
-moovar: list = [1,2,3]
-
-for item in moovar {
-    console.out(item)
+define add_numbers with a,b {
+    return a+b
 }
+
+x: int = 5;
+y: int = 4;
+
+result: int = add_numbers(x,y);
+
+console.out(result)
