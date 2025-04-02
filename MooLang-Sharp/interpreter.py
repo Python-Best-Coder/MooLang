@@ -1,6 +1,7 @@
 import re
 import colorama
 import time
+import random
 
 path = "code.ml2" # Switch to any moo-lang-2 file (.ml2) inside the folder.
 debugmode = False
@@ -67,6 +68,7 @@ class Function:
         for index,parameter in enumerate(self.param):
             variables[parameter] = param[index]
         for line in self.lines:
+            print(line)
             if not line.split(" ")[0] == "return":
                 interpret(line)
             else:
@@ -87,7 +89,7 @@ class Function:
                 variables.pop(p)
 
 
-variables = {}
+variables = {"pi":3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348,"moo":"all_praise_moo"}
 typeroo = {}
 functions = []
 global_scope = 0
@@ -97,7 +99,7 @@ def err_syntax(m):
     return colorama.Fore.RED + m + colorama.Fore.RESET
 
 def is_name(s):
-    return re.search(r"^[a-zA-Z_][a-zA-Z0-9_]*$",s)
+    return re.search(r"^[a-zA-Z_][a-zA-Z0-9_]*$",s) and s.upper() not in ["MOO","pi"]
 
 def moocleanup():
     try:
@@ -112,13 +114,15 @@ def moocleanup():
 def interpret(line):
     global variables,inside
     line = str(line).strip()
+    if line.endswith(";"):
+        line = line[:-1]
     if debugmode:
         print(line)
 
-    makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*;", line) 
+    makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*", line) 
     indexation = re.search(r"(.+)\[(.+)\]",line)
     out = re.search(r"console.out\((.+)\)",line)
-    add = re.search(r"^\s*(\S+)\s*\+\s*(\S+)\s*$", line)
+    add = re.search(r"(.+)\+(.+)", line)
     removevar = re.search(r"rmv (.+)",line)
     sub = re.search(r"^\s*(\S+)\s*\-\s*(\S+)\s*$", line)
     mul = re.search(r"^\s*(\S+)\s*\*\s*(\S+)\s*$", line)
@@ -131,7 +135,6 @@ def interpret(line):
     gre  = re.search(r"^\s*(\S+)\s*>=\s*(\S+)\s*$", line)
     lse  = re.search(r"^\s*(\S+)\s*<=\s*(\S+)\s*$", line)
     inputs = re.search(r"inp\[(.+)\]",line)
-
     no_t = re.search(r"not (.+)",line)
     ct = re.search(r"#(.+)#\[(.+)\]",line)
     autols = re.search(r"range\{(.+)\}",line)
@@ -139,11 +142,23 @@ def interpret(line):
     forloop = re.search(r"for (.+) in \((.+)\) \{",line)
     whileloop = re.search(r"while \((.+)\) do \{",line)
     funct = re.search(r"define (.+) with (.+) \{",line)
+    wait_cmd = re.search(r"wait\((.+)\)", line)
+    clear_cmd = re.search(r"clear\(\)", line)
+    rand_cmd = re.search(r"rand\((.+),(.+)\)", line)
+    len_cmd = re.search(r"len\((.+)\)", line)
+    append_cmd = re.search(r"append\((.+),(.+)\)", line)
+    remove_cmd = re.search(r"remove\((.+),(.+)\)", line)
+    reverse_cmd = re.search(r"reverse\((.+)\)", line)
+    exit_cmd = re.search(r"exit\(\)", line)
+    type_cmd = re.search(r"type\((.+)\)", line)
+    uppercase_cmd = re.search(r"uppercase\((.+)\)", line)
+    lowercase_cmd = re.search(r"lowercase\((.+)\)", line)
     an_d = re.search(r"(.+) and (.+)",line)
     if out:
         print(interpret(out.group(1)))
         return interpret(out.group(1))
-
+    if len(line) >= 2 and line[0] in ['"',"'"] and line[-1] in ['"',"'"]:
+        return str(line[1:-1])
     elif makevar:
         if is_name(makevar.group(1).strip()):
             mooey = interpret(makevar.group(3))
@@ -151,7 +166,7 @@ def interpret(line):
                 mooey = mooey[-1]
 
 
-            variables[makevar.group(1).strip()] = eval(f"{makevar.group(2)}({mooey})")
+            variables[makevar.group(1).strip()] = eval(f"{makevar.group(2)}(\"{mooey}\")")
             
             typeroo[makevar.group(1).strip()] = makevar.group(2)
         else:
@@ -213,8 +228,34 @@ def interpret(line):
         return variables[line]
     elif line.startswith("$") and line[1:] in variables:
         return line[1:]
-    elif len(line) >= 2 and line[0] in ['"',"'"] and line[-1] in ['"',"'"]:
-        return str(line[1:-1])
+    
+    if wait_cmd:
+        time.sleep(float(interpret(wait_cmd.group(1))))
+        return
+    if clear_cmd:
+        print("\033c", end="")
+        return
+    if rand_cmd:
+        return random.randint(int(interpret(rand_cmd.group(1))), int(interpret(rand_cmd.group(2))))
+    if len_cmd:
+        return len(interpret(len_cmd.group(1)))
+    if append_cmd:
+        variables[append_cmd.group(1)].append(interpret(append_cmd.group(2)))
+        return
+    if remove_cmd:
+        variables[remove_cmd.group(1)].pop(int(interpret(remove_cmd.group(2))))
+        return
+    if reverse_cmd:
+        return interpret(reverse_cmd.group(1))[::-1]
+    if exit_cmd:
+        exit()
+    if type_cmd:
+        return str(type(interpret(type_cmd.group(1))).__name__)
+    if uppercase_cmd:
+        return interpret(uppercase_cmd.group(1)).upper()
+    if lowercase_cmd:
+        return interpret(lowercase_cmd.group(1)).lower()
+    
     for name in functions:
         if name[0] in line:
             call = re.search(name[0]+r"\((.+)\)",line)
@@ -235,40 +276,49 @@ def interpret(line):
 
 
 def work(txt:str):
+        lnn = 1
         for line in open(txt,"r").read().splitlines():
             
             line = line.strip()
             if inside == [] or not isinstance(inside[0],Statement) and not isinstance(inside[0],Forl) and not isinstance(inside[0],Function) and not isinstance(inside[0],Whilel):
-                x = interpret(line)
+                try:
+                    x = interpret(line)
+                except Exception as e:
+                    print(f"{colorama.Fore.GREEN + "Error at line" + colorama.Fore.RESET} {colorama.Fore.BLUE + str(lnn) + colorama.Fore.RESET}: {colorama.Fore.RED + str(e) + colorama.Fore.RESET}")
+                    moocleanup()
+                    return
+
             else:
                 if len(inside) >= 1:
                     if isinstance(inside[0],Statement):
                         if line != "}":
-                            inside[0].add_line(line)
+                            inside[-1].add_line(line)
                         else:
-                            inside[0].run()
+                            inside[-1].run()
                             inside.pop()
                     elif isinstance(inside[0],Forl):
                         if line != "}":
-                            inside[0].add_line(line)
+                            inside[-1].add_line(line)
                         else:
-                            inside[0].run()
+                            inside[-1].run()
                             inside.pop()
                     elif isinstance(inside[0],Whilel):
                         if line != "}":
-                            inside[0].add_line(line)
+                            inside[-1].add_line(line)
                         else:
-                            inside[0].run()
+                            inside[-1].run()
                             inside.pop()
                     elif isinstance(inside[0],Function):
                         if line != "}":
-                            inside[0].add_line(line)
+                            inside[-1].add_line(line)
                         else:
-                            functions.append((inside[0].name,inside[0]))
+                            functions.append((inside[-1].name,inside[-1]))
                             inside.pop()
+
+            lnn += 1
 
 rfke = time.time()
 
 work(path)
 
-print(f"Ran in {time.time() - rfke} secs")
+print(f"Ran in {round(time.time() - rfke,4)} secs")
