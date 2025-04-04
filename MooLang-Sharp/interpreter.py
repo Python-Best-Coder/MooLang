@@ -2,47 +2,48 @@ import re
 import colorama
 import time
 import random
+import sys
+from io import StringIO
 
-path = "code.ml2" # Switch to any moo-lang-2 file (.ml2) inside the folder.
+path = "code.ml2"  # Switch to any moo-lang-2 file (.ml2) inside the folder.
 debugmode = False
 
 class Forl:
-    def __init__(self,replacementvar,inside):
-        self.var = replacementvar     
+    def __init__(self, replacementvar, inside):
+        self.var = replacementvar
         self.lines = []
         self.ins = inside
 
-    def add_line(self,line):
+    def add_line(self, line):
         self.lines.append(line)
 
     def run(self):
-        
         for x in self.ins:
-           variables[self.var] = x
-           for line in self.lines:
+            variables[self.var] = x
+            for line in self.lines:
                 interpret(line)
-        variables.pop(self.var)
-        
+        if self.var in variables:
+            variables.pop(self.var)
+
 class Whilel:
-    def __init__(self,condition):  
-        self.c = condition 
+    def __init__(self, condition):
+        self.c = condition
         self.lines = []
 
-    def add_line(self,line):
+    def add_line(self, line):
         self.lines.append(line)
 
     def run(self):
         while interpret(self.c):
             for line in self.lines:
                 interpret(line)
-   
 
 class Statement:
-    def __init__(self,condition):
+    def __init__(self, condition):
         self.condition = condition
         self.lines = []
-    
-    def add_line(self,line):
+
+    def add_line(self, line):
         self.lines.append(line)
 
     def run(self):
@@ -51,153 +52,147 @@ class Statement:
                 interpret(line)
 
 class Function:
-    def __init__(self,name,parameters):
+    def __init__(self, name, parameters):
         self.name = name
         self.param = parameters
         self.extravars = []
         self.lines = []
-    
-    def add_line(self,line):
-        self.lines.append(line)
-        makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*", line) 
-        if makevar:
-            if is_name(makevar.group(1).strip()):
-                self.extravars.append(makevar.group(1).strip())
 
-    def run(self,param):
-        for index,parameter in enumerate(self.param):
+    def add_line(self, line):
+        self.lines.append(line)
+        makevar = re.match(r"^\s*(\w+)\s*:\s*(\w+)\s*=\s*(.+)$", line)
+        if makevar and is_name(makevar.group(1)):
+            self.extravars.append(makevar.group(1))
+
+    def run(self, param):
+        if len(param) != len(self.param):
+            raise ValueError(f"Function '{self.name}' expected {len(self.param)} arguments, got {len(param)}")
+        for index, parameter in enumerate(self.param):
             variables[parameter] = param[index]
         for line in self.lines:
-            print(line)
-            if not line.split(" ")[0] == "return":
-                interpret(line)
-            else:
-                mo = interpret("".join(line.split(" ")[1:]))
-                for p in self.param:
-                    if p in variables:
-                        variables.pop(p)
-                for p in self.extravars:
-                    if p in variables:
-                        variables.pop(p)
+            if line.strip().startswith("return"):
+                mo = interpret(" ".join(line.split()[1:]))
+                self._cleanup()
                 return mo
+            interpret(line)
+        self._cleanup()
+        return None
 
-        for p in self.param:
-            if p in variables:
-                variables.pop(p)
-        for p in self.extravars:
-            if p in variables:
-                variables.pop(p)
+    def _cleanup(self):
+        for p in self.param + self.extravars:
+            variables.pop(p, None)  # Safe removal
 
-
-variables = {"pi":3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348,"moo":"all_praise_moo"}
+variables = {"pi": 3.141592653589793, "moo": "all_praise_moo"}
+imports = []
 typeroo = {}
 functions = []
-global_scope = 0
 inside = []
 
 def err_syntax(m):
     return colorama.Fore.RED + m + colorama.Fore.RESET
 
 def is_name(s):
-    return re.search(r"^[a-zA-Z_][a-zA-Z0-9_]*$",s) and s.upper() not in ["MOO","pi"]
+    return bool(re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", s)) and s.upper() not in ["MOO", "PI"]
 
 def moocleanup():
-    try:
-        for var in typeroo:
-            if not var in variables:
-                typeroo.pop(var)
-    except Exception:
-        pass
-
-
+    for var in list(typeroo.keys()):  # Use list to avoid runtime dict modification
+        if var not in variables:
+            typeroo.pop(var, None)
 
 def interpret(line):
-    global variables,inside
+    global variables, inside
     line = str(line).strip()
     if line.endswith(";"):
         line = line[:-1]
     if debugmode:
-        print(line)
+        print(f"DEBUG: {line}")
 
-    makevar = re.search(r"\s*(\w+)\s*:\s*(\w+)\s*=\s*(\S+)\s*", line) 
-    indexation = re.search(r"(.+)\[(.+)\]",line)
-    out = re.search(r"console.out\((.+)\)",line)
-    add = re.search(r"(.+)\+(.+)", line)
-    removevar = re.search(r"rmv (.+)",line)
-    sub = re.search(r"^\s*(\S+)\s*\-\s*(\S+)\s*$", line)
-    mul = re.search(r"^\s*(\S+)\s*\*\s*(\S+)\s*$", line)
-    div = re.search(r"^\s*(\S+)\s*/\s*(\S+)\s*$", line)
-    eq  = re.search(r"^\s*(\S+)\s*\=\=\s*(\S+)\s*$", line)
-    addeq  = re.search(r"^\s*(\S+)\s*\+=\s*(\S+)\s*$", line)
-    subeq  = re.search(r"^\s*(\S+)\s*\-=\s*(\S+)\s*$", line)
-    gr  = re.search(r"^\s*(\S+)\s*>\s*(\S+)\s*$", line)
-    ls  = re.search(r"^\s*(\S+)\s*<\s*(\S+)\s*$", line)
-    gre  = re.search(r"^\s*(\S+)\s*>=\s*(\S+)\s*$", line)
-    lse  = re.search(r"^\s*(\S+)\s*<=\s*(\S+)\s*$", line)
-    inputs = re.search(r"inp\[(.+)\]",line)
-    no_t = re.search(r"not (.+)",line)
-    ct = re.search(r"#(.+)#\[(.+)\]",line)
-    autols = re.search(r"range\{(.+)\}",line)
-    ifst = re.search(r"if \((.+)\) then \{",line)
-    forloop = re.search(r"for (.+) in \((.+)\) \{",line)
-    whileloop = re.search(r"while \((.+)\) do \{",line)
-    funct = re.search(r"define (.+) with (.+) \{",line)
-    wait_cmd = re.search(r"wait\((.+)\)", line)
-    clear_cmd = re.search(r"clear\(\)", line)
-    rand_cmd = re.search(r"rand\((.+),(.+)\)", line)
-    len_cmd = re.search(r"len\((.+)\)", line)
-    append_cmd = re.search(r"append\((.+),(.+)\)", line)
-    remove_cmd = re.search(r"remove\((.+),(.+)\)", line)
-    reverse_cmd = re.search(r"reverse\((.+)\)", line)
-    exit_cmd = re.search(r"exit\(\)", line)
-    type_cmd = re.search(r"type\((.+)\)", line)
-    uppercase_cmd = re.search(r"uppercase\((.+)\)", line)
-    lowercase_cmd = re.search(r"lowercase\((.+)\)", line)
-    an_d = re.search(r"(.+) and (.+)",line)
+    # Updated regex patterns
+    makevar = re.match(r"^\s*(\w+)\s*:\s*(\w+)\s*=\s*(.+)$", line)
+    indexation = re.match(r"^\s*(.+?)\[(.+?)\]$", line)
+    out = re.match(r"^\s*console\.out\((.+)\)$", line)
+    add = re.match(r"^\s*(.+?)\s*\+\s*(.+)$", line)
+    removevar = re.match(r"^\s*rmv\s+(.+)$", line)
+    useimp = re.match(r"^\s*(\w+)\.(.+)$", line)
+    impo = re.match(r"^\s*use\s+<(.+)>$", line)
+    sub = re.match(r"^\s*(.+?)\s*-\s*(.+)$", line)
+    mul = re.match(r"^\s*(.+?)\s*\*\s*(.+)$", line)
+    div = re.match(r"^\s*(.+?)\s*/\s*(.+)$", line)
+    eq = re.match(r"^\s*(.+?)\s*==\s*(.+)$", line)
+    addeq = re.match(r"^\s*(\w+)\s*\+=\s*(.+)$", line)
+    subeq = re.match(r"^\s*(\w+)\s*-=\s*(.+)$", line)
+    gr = re.match(r"^\s*(.+?)\s*>\s*(.+)$", line)
+    ls = re.match(r"^\s*(.+?)\s*<\s*(.+)$", line)
+    gre = re.match(r"^\s*(.+?)\s*>=\s*(.+)$", line)
+    lse = re.match(r"^\s*(.+?)\s*<=\s*(.+)$", line)
+    inputs = re.match(r"^\s*inp\[(.+)\]$", line)
+    no_t = re.match(r"^\s*not\s+(.+)$", line)
+    ct = re.match(r"^\s*#(.+)#\[(.+)\]$", line)
+    autols = re.match(r"^\s*range\{(.+)\}$", line)
+    ifst = re.match(r"^\s*if\s*\((.+)\)\s*then\s*\{$", line)
+    forloop = re.match(r"^\s*for\s+(\w+)\s+in\s*\((.+)\)\s*\{$", line)
+    whileloop = re.match(r"^\s*while\s*\((.+)\)\s*do\s*\{$", line)
+    funct = re.match(r"^\s*define\s+(\w+)\s+with\s+(.+)\s*\{$", line)
+    wait_cmd = re.match(r"^\s*wait\((.+)\)$", line)
+    clear_cmd = re.match(r"^\s*clear\(\)$", line)
+    rand_cmd = re.match(r"^\s*rand\((.+),(.+)\)$", line)
+    len_cmd = re.match(r"^\s*len\((.+)\)$", line)
+    append_cmd = re.match(r"^\s*append\((.+),(.+)\)$", line)
+    remove_cmd = re.match(r"^\s*remove\((.+),(.+)\)$", line)
+    reverse_cmd = re.match(r"^\s*reverse\((.+)\)$", line)
+    exit_cmd = re.match(r"^\s*exit\(\)$", line)
+    type_cmd = re.match(r"^\s*type\((.+)\)$", line)
+    uppercase_cmd = re.match(r"^\s*uppercase\((.+)\)$", line)
+    lowercase_cmd = re.match(r"^\s*lowercase\((.+)\)$", line)
+    an_d = re.match(r"^\s*(.+?)\s+and\s+(.+)$", line)
+
     if out:
-        print(interpret(out.group(1)))
-        return interpret(out.group(1))
-    if len(line) >= 2 and line[0] in ['"',"'"] and line[-1] in ['"',"'"]:
-        return str(line[1:-1])
+        result = interpret(out.group(1))
+        print(result)
+        return result
+    if len(line) >= 2 and line[0] in ['"', "'"] and line[-1] in ['"', "'"]:
+        return line[1:-1]
+    elif impo:
+        module = impo.group(1)
+        imports.append(module)
+        return module
     elif makevar:
-        if is_name(makevar.group(1).strip()):
-            mooey = interpret(makevar.group(3))
-            if isinstance(mooey,list):
-                mooey = mooey[-1]
-
-
-            variables[makevar.group(1).strip()] = eval(f"{makevar.group(2)}(\"{mooey}\")")
-            
-            typeroo[makevar.group(1).strip()] = makevar.group(2)
-        else:
-            print(f"Moo Error: {makevar.group(1)} \n{err_syntax('Name cannot be used as a variable')}")
+        var_name = makevar.group(1)
+        var_type = makevar.group(2)
+        value = interpret(makevar.group(3))
+        if not is_name(var_name):
+            print(f"Moo Error: {var_name} \n{err_syntax('Invalid variable name')}")
             return "Terminate_*"
+        if isinstance(value, str) and var_type in ["int", "float"]:
+            value = eval(f"{var_type}({value.strip()})")
+        variables[var_name] = value
+        typeroo[var_name] = var_type
+        return value
     elif removevar:
-        if removevar.group(1) in variables:
-            variables.pop(removevar.group(1))
+        var = removevar.group(1)
+        variables.pop(var, None)
+        typeroo.pop(var, None)
     elif inputs:
-        
         return input(interpret(inputs.group(1)))
     elif ifst:
-        inside.append(Statement(interpret(ifst.group(1))))
+        inside.append(Statement(ifst.group(1)))
     elif forloop:
-        inside.append(Forl(forloop.group(1),interpret(forloop.group(2))))
+        inside.append(Forl(forloop.group(1), interpret(forloop.group(2))))
     elif whileloop:
         inside.append(Whilel(whileloop.group(1)))
     elif funct:
         if is_name(funct.group(1)):
-            inside.append(Function(funct.group(1),funct.group(2).split(",")))
+            inside.append(Function(funct.group(1), [p.strip() for p in funct.group(2).split(",")]))
     elif no_t:
         return not interpret(no_t.group(1))
     elif eq:
-        print(interpret(eq.group(1)),interpret(eq.group(2)))
         return interpret(eq.group(1)) == interpret(eq.group(2))
     elif gr:
         return interpret(gr.group(1)) > interpret(gr.group(2))
     elif ls:
         return interpret(ls.group(1)) < interpret(ls.group(2))
     elif gre:
-        return interpret(gre.group(1)) >= interpret(gre.group(2))
+        return interpret(gre.group(1)) >= interpret(gr.group(2))
     elif lse:
         return interpret(lse.group(1)) <= interpret(lse.group(2))
     elif an_d:
@@ -207,14 +202,15 @@ def interpret(line):
     elif indexation:
         return variables[interpret(indexation.group(1))][int(interpret(indexation.group(2)))]
     elif autols:
-        x = []
-        for i in range(int(interpret(autols.group(1).strip()))):
-            x.append(i)
-        return x
+        return list(range(int(interpret(autols.group(1)))))
     elif subeq:
-        variables[subeq.group(1)] -= eval(f"{typeroo[subeq.group(1)]}({interpret(subeq.group(2))})")
+        var = subeq.group(1)
+        if var in variables:
+            variables[var] -= interpret(subeq.group(2))
     elif addeq:
-        variables[addeq.group(1)] += eval(f"{typeroo[addeq.group(1)]}({interpret(addeq.group(2))})")
+        var = addeq.group(1)
+        if var in variables:
+            variables[var] += interpret(addeq.group(2))
     elif sub:
         return interpret(sub.group(1)) - interpret(sub.group(2))
     elif add:
@@ -223,102 +219,86 @@ def interpret(line):
         return interpret(div.group(1)) / interpret(div.group(2))
     elif mul:
         return interpret(mul.group(1)) * interpret(mul.group(2))
-
+    elif wait_cmd:
+        time.sleep(float(interpret(wait_cmd.group(1))))
+    elif clear_cmd:
+        print("\033c", end="")
+    elif rand_cmd:
+        return random.randint(int(interpret(rand_cmd.group(1))), int(interpret(rand_cmd.group(2))))
+    elif len_cmd:
+        return len(interpret(len_cmd.group(1)))
+    elif append_cmd:
+        variables[append_cmd.group(1)].append(interpret(append_cmd.group(2)))
+    elif remove_cmd:
+        variables[remove_cmd.group(1)].pop(int(interpret(remove_cmd.group(2))))
+    elif reverse_cmd:
+        return interpret(reverse_cmd.group(1))[::-1]
+    elif exit_cmd:
+        sys.exit(0)
+    elif type_cmd:
+        return str(type(interpret(type_cmd.group(1))).__name__)
+    elif uppercase_cmd:
+        return str(interpret(uppercase_cmd.group(1))).upper()
+    elif lowercase_cmd:
+        return str(interpret(lowercase_cmd.group(1))).lower()
+    elif useimp:
+        if useimp.group(1) in imports:
+            old_stdout = sys.stdout
+            new_stdout = StringIO()
+            sys.stdout = new_stdout
+            try:
+                exec(f"import {useimp.group(1)}\nprint({useimp.group(1)}.{useimp.group(2)})")
+                output = new_stdout.getvalue().strip()
+                return output if output.isdigit() else output  # Return as int if numeric
+            except Exception as e:
+                print(f"Moo Error: {err_syntax(str(e))}")
+                return "Terminate_*"
+            finally:
+                sys.stdout = old_stdout
+        else:
+            print(f"Moo Error: Module '{useimp.group(1)}' not imported")
+            return "Terminate_*"
     elif line in variables:
         return variables[line]
     elif line.startswith("$") and line[1:] in variables:
         return line[1:]
-    
-    if wait_cmd:
-        time.sleep(float(interpret(wait_cmd.group(1))))
-        return
-    if clear_cmd:
-        print("\033c", end="")
-        return
-    if rand_cmd:
-        return random.randint(int(interpret(rand_cmd.group(1))), int(interpret(rand_cmd.group(2))))
-    if len_cmd:
-        return len(interpret(len_cmd.group(1)))
-    if append_cmd:
-        variables[append_cmd.group(1)].append(interpret(append_cmd.group(2)))
-        return
-    if remove_cmd:
-        variables[remove_cmd.group(1)].pop(int(interpret(remove_cmd.group(2))))
-        return
-    if reverse_cmd:
-        return interpret(reverse_cmd.group(1))[::-1]
-    if exit_cmd:
-        exit()
-    if type_cmd:
-        return str(type(interpret(type_cmd.group(1))).__name__)
-    if uppercase_cmd:
-        return interpret(uppercase_cmd.group(1)).upper()
-    if lowercase_cmd:
-        return interpret(lowercase_cmd.group(1)).lower()
-    
-    for name in functions:
-        if name[0] in line:
-            call = re.search(name[0]+r"\((.+)\)",line)
-            if call:
-                p = []
-                for itex in call.group(1).split(","):
-                    p.append(interpret(itex))
-                sc = name[1].run(p)
-                if type(sc) == list:
-                    sc = sc[0]
-                
-                return sc
-    
+
+    for name, func in functions:
+        if re.match(rf"^{name}\((.*)\)$", line):
+            call = re.match(rf"^{name}\((.*)\)$", line)
+            params = [interpret(p.strip()) for p in call.group(1).split(",")] if call.group(1) else []
+            return func.run(params)
+
     moocleanup()
+    try:
+        return eval(line)  # Fallback for simple expressions
+    except:
+        return line  # Return as-is if not interpretable
 
-    return line
-
-
-
-def work(txt:str):
-        lnn = 1
-        for line in open(txt,"r").read().splitlines():
-            
-            line = line.strip()
-            if inside == [] or not isinstance(inside[0],Statement) and not isinstance(inside[0],Forl) and not isinstance(inside[0],Function) and not isinstance(inside[0],Whilel):
-                try:
-                    x = interpret(line)
-                except Exception as e:
-                    print(f"{colorama.Fore.GREEN + "Error at line" + colorama.Fore.RESET} {colorama.Fore.BLUE + str(lnn) + colorama.Fore.RESET}: {colorama.Fore.RED + str(e) + colorama.Fore.RESET}")
-                    moocleanup()
-                    return
-
-            else:
-                if len(inside) >= 1:
-                    if isinstance(inside[0],Statement):
-                        if line != "}":
-                            inside[-1].add_line(line)
-                        else:
-                            inside[-1].run()
-                            inside.pop()
-                    elif isinstance(inside[0],Forl):
-                        if line != "}":
-                            inside[-1].add_line(line)
-                        else:
-                            inside[-1].run()
-                            inside.pop()
-                    elif isinstance(inside[0],Whilel):
-                        if line != "}":
-                            inside[-1].add_line(line)
-                        else:
-                            inside[-1].run()
-                            inside.pop()
-                    elif isinstance(inside[0],Function):
-                        if line != "}":
-                            inside[-1].add_line(line)
-                        else:
-                            functions.append((inside[-1].name,inside[-1]))
-                            inside.pop()
-
-            lnn += 1
+def work(txt: str):
+    lnn = 1
+    try:
+        with open(txt, "r") as f:
+            for line in f.read().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if inside:
+                    if line == "}":
+                        inside[-1].run()
+                        inside.pop()
+                    else:
+                        inside[-1].add_line(line)
+                else:
+                    result = interpret(line)
+                    if result == "Terminate_*":
+                        return
+                lnn += 1
+    except FileNotFoundError:
+        print(f"Moo Error: File '{txt}' not found")
+    except Exception as e:
+        print(f"{colorama.Fore.GREEN}Error at line {colorama.Fore.BLUE}{lnn}{colorama.Fore.RESET}: {err_syntax(str(e))}")
 
 rfke = time.time()
-
 work(path)
-
-print(f"Ran in {round(time.time() - rfke,4)} secs")
+print(f"Ran in {round(time.time() - rfke, 4)} secs")
